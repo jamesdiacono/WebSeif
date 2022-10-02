@@ -194,10 +194,6 @@ function make_aes(webcrypto = window.crypto) {
 //      Generates a new symmetric key. The returned Promise resolves to a
 //      CryptoKey.
 
-//  import_key(buffer)
-//      Interprets an ArrayBuffer as a symmetric key. The returned Promise
-//      resolves to the CryptoKey instance.
-
 //  encrypt(plaintext, key, iv)
 //      Encrypt a plaintext ArrayBuffer with a CryptoKey and an initialization
 //      vector. The returned Promise resolves to the ciphertext ArrayBuffer.
@@ -207,20 +203,17 @@ function make_aes(webcrypto = window.crypto) {
 //      initialization vector that were used to encrypt it. The returned
 //      Promise resolves to the plaintext ArrayBuffer.
 
+//  derive_key(public_key, private_key)
+//      Derives a symmetric key from a public and private key using the
+//      Diffie-Hellman key exchange protocol (ECDH). The public and private
+//      keys do not form a keypair. The returned Promise resolves to the shared
+//      secret, a CryptoKey instance.
+
     return Object.freeze({
         generate_key() {
             return webcrypto.subtle.generateKey(
                 {name: "AES-GCM", length: 256},
                 true,
-                ["encrypt", "decrypt"]
-            );
-        },
-        import_key(buffer) {
-            return webcrypto.subtle.importKey(
-                "raw",
-                buffer,
-                {name: "AES-GCM"},
-                false,
                 ["encrypt", "decrypt"]
             );
         },
@@ -237,12 +230,24 @@ function make_aes(webcrypto = window.crypto) {
                 key,
                 ciphertext
             );
+        },
+        derive_key(public_key, private_key) {
+            return webcrypto.subtle.deriveKey(
+                {
+                    name: "ECDH",
+                    public: public_key
+                },
+                private_key,
+                {name: "AES-GCM", length: 256},
+                true,
+                ["encrypt", "decrypt"]
+            );
         }
     });
 }
 
 function hello(
-    crypto,
+    webcrypto,
     initiator_public_key,
     receiver_public_key,
     encryption_iv,
@@ -253,7 +258,7 @@ function hello(
 // The 'hello' function produces some values that are required to initiate a
 // Seif handshake. It takes the following parameters:
 
-//      crypto: The WebCrypto object.
+//      webcrypto: The WebCrypto object.
 //      initiator_public_key: The public key of the initiator, as a CryptoKey.
 //      receiver_public_key: The public key of the receiver, as a CryptoKey.
 //      encryption_iv: An IV to be used for a single encryption.
@@ -265,61 +270,62 @@ function hello(
 //      hello_record: The Hello record as an ArrayBuffer.
 //      handshake_key: The generated handshake key, as a CryptoKey.
 
-// We begin by generating a handshake key, which is then encrypted with the
-// receivers public key. Concurrently, the initiator's public key is added to
-// the "hello data", which is then encrypted with the handshake key.
+    const aes = make_aes(webcrypto);
+    const elliptic = make_elliptic(webcrypto);
 
-    const aes = make_aes(crypto);
-    const elliptic = make_elliptic(crypto);
-    return Promise.all([
-        aes.generate_key(),
-        elliptic.export_public_key(initiator_public_key)
-    ]).then(function ([handshake_key, initiator_public_key_buffer]) {
+// We begin by generating an ephemeral keypair and immediately use it to derive
+// the handshake key. This handshake key is used to encrypt the "hello data",
+// which contains our public key.
+
+    return elliptic.generate_keypair().then(function (ephemeral) {
         return Promise.all([
-            elliptic.export_public_key(
-                handshake_key
-            ).then(function (handshake_key_buffer) {
-                return elliptic.encrypt(
-                    handshake_key_buffer,
-                    receiver_public_key
-                );
-            }),
-            aes.encrypt(
+            aes.derive_key(receiver_public_key, ephemeral.privateKey),
+            elliptic.export_public_key(initiator_public_key),
+            elliptic.export_public_key(ephemeral.publicKey)
+        ]).then(function ([
+            handshake_key,
+            initiator_public_key_buffer,
+            ephemeral_public_key_buffer
+        ]) {
+            return aes.encrypt(
                 encode_json({
                     initiatorPublicKey: hex.encode(initiator_public_key_buffer),
                     value: hello_value
                 }),
                 handshake_key,
                 encryption_iv
-            )
-        ]).then(function ([
-            encrypted_handshake_key_buffer,
-            encrypted_hello_data_buffer
-        ]) {
-            return make_record(
-                {type: "Hello"},
-                {
-                    version: 0,
-                    handshakeKey: encrypted_handshake_key_buffer,
-                    helloData: encrypted_hello_data_buffer,
-                    connectionInfo: connection_info
-                },
-                function encrypt(buffer) {
+            ).then(function (encrypted_hello_data_buffer) {
+
+// The Seif Protocol specification states that a Hello record's "handshakeKey"
+// property contains the handshake key encrypted by the receiver's public key.
+// But because we derived the handshake key via ECDH, this is simply the
+// ephemeral public key.
+
+                return make_record(
+                    {type: "Hello"},
+                    {
+                        version: 0,
+                        handshakeKey: ephemeral_public_key_buffer,
+                        helloData: encrypted_hello_data_buffer,
+                        connectionInfo: connection_info
+                    },
+                    function encrypt(buffer) {
 
 // The sensitive parts of the Hello record have already been encrypted, so we
 // can skip this step.
 
-                    return buffer;
-                }
-            );
-        }).then(function (hello_record) {
-            return {hello_record, handshake_key};
+                        return buffer;
+                    }
+                );
+            }).then(function (hello_record) {
+                return {hello_record, handshake_key};
+            });
         });
     });
 }
 
 function auth_hello(
-    crypto,
+    webcrypto,
     hello_message,
     private_key,
     next_decryption_iv,
@@ -329,7 +335,7 @@ function auth_hello(
 // The 'auth_hello' function produces some values that are required to complete
 // a Seif handshake. It takes the following parameters:
 
-//      crypto: The WebCrypto object.
+//      webcrypto: The WebCrypto object.
 //      hello_message: The Hello message as an object.
 //      private_key: The listener's private key, as a CryptoKey.
 //      next_decryption_iv: An IV generator for decryption.
@@ -340,27 +346,27 @@ function auth_hello(
 //      auth_hello_record: An ArrayBuffer containing the AuthHello record.
 //      session_key: The negotiated session key, as a CryptoKey.
 //      hello_value: The value sent with the Hello message.
+//      initiator_public_key: The initiating party's public key, as a CryptoKey.
 
     if (hello_message.version !== 0) {
         return Promise.reject(new Error("Unsupported Seif version."));
     }
 
-// The Hello message contains the handshake key encrypted with our public key,
-// and the initiator's public key encrypted with the handshake key. Decrypt
-// everything, and if it looks good, construct a response containing the session
-// key encrypted with the initiator's public key.
+// The Hello message contains the ephemeral public key of the handshake key
+// exchange, and the initiator's public key encrypted by the handshake key. We
+// derive and decrypt, and if it looks good we construct a response that
+// initiates the session key exchange.
 
-    const aes = make_aes(crypto);
-    const elliptic = make_elliptic(crypto);
+    const aes = make_aes(webcrypto);
+    const elliptic = make_elliptic(webcrypto);
     let hello_value;
     let session_key;
     let initiator_public_key;
-    return elliptic.decrypt(
-        hello_message.handshakeKey,
-        private_key
-    ).then(
-        aes.import_key
-    ).then(function (handshake_key) {
+    return elliptic.import_public_key(
+        hello_message.handshakeKey
+    ).then(function (ephemeral_public_key) {
+        return aes.derive_key(ephemeral_public_key, private_key);
+    }).then(function (handshake_key) {
         return aes.decrypt(
             hello_message.helloData,
             handshake_key,
@@ -369,34 +375,27 @@ function auth_hello(
             const {initiatorPublicKey, value} = decode_json(hello_buffer);
             hello_value = value;
 
-// Generate the session key, and meanwhile import the initiator's public key so
-// that it can be used to encrypt the session key.
+// Generate the ephemeral keypair for the session key exchange, and import the
+// initiator's public key so that it can be used to derive the session key.
 
             return Promise.all([
-                aes.generate_key(),
+                elliptic.generate_keypair(),
                 elliptic.import_public_key(hex.decode(initiatorPublicKey))
             ]);
-        }).then(function ([the_session_key, the_initiator_public_key]) {
-            session_key = the_session_key;
+        }).then(function ([ephemeral, the_initiator_public_key]) {
             initiator_public_key = the_initiator_public_key;
-            return elliptic.export_public_key(
-                the_session_key
-            ).then(function (session_key_buffer) {
-
-// Encrypt the session key with the initiator's public key.
-
-                return elliptic.encrypt(
-                    session_key_buffer,
-                    the_initiator_public_key
-                );
-            });
-        }).then(function (encrypted_session_key) {
+            return Promise.all([
+                aes.derive_key(initiator_public_key, ephemeral.privateKey),
+                elliptic.export_public_key(ephemeral.publicKey)
+            ]);
+        }).then(function ([the_session_key, ephemeral_public_key_buffer]) {
 
 // Construct the AuthHello record.
 
+            session_key = the_session_key;
             return make_record(
                 {type: "AuthHello"},
-                {sessionKey: encrypted_session_key},
+                {sessionKey: ephemeral_public_key_buffer},
                 function encrypt(buffer) {
                     return aes.encrypt(
                         buffer,
@@ -417,7 +416,7 @@ function auth_hello(
 }
 
 function make_consumer(
-    crypto,                          // The WebCrypto object.
+    webcrypto,                       // The WebCrypto object.
     transport_connection,            // The underlying transport connection.
     private_key,                     // Our private key.
     next_encryption_iv,              // Returns the next encryption IV.
@@ -451,8 +450,8 @@ function make_consumer(
     let queue = Promise.resolve();   // Outgoing message queue.
     let pending_acks = [];           // Pending acknowledgement callbacks.
 
-    const aes = make_aes(crypto);
-    const elliptic = make_elliptic(crypto);
+    const aes = make_aes(webcrypto);
+    const elliptic = make_elliptic(webcrypto);
 
     function encrypt(plain) {
         return aes.encrypt(
@@ -472,7 +471,7 @@ function make_consumer(
 
     function destroy(reason, situation_option) {
 
-// The value of 'situation_option' may be one of three values:
+// The value of 'situation_option' may be one of:
 
 //      undefined: There was a problem.
 //      true: The connection is no longer required.
@@ -596,7 +595,7 @@ function make_consumer(
 
                 busy = true;
                 return auth_hello(
-                    crypto,
+                    webcrypto,
                     message,
                     private_key,
 
@@ -631,15 +630,15 @@ function make_consumer(
                 );
             }
 
-// We have received the AuthHello message. Decrypt the session key within.
+// We have received the AuthHello message. Derive the session key using the
+// ephemeral public key plus our private key.
 
             busy = true;
-            return elliptic.decrypt(
-                message.sessionKey,
-                private_key
-            ).then(
-                aes.import_key
-            ).then(function (the_session_key) {
+            return elliptic.import_public_key(
+                message.sessionKey
+            ).then(function (ephemeral_public_key) {
+                return aes.derive_key(ephemeral_public_key, private_key);
+            }).then(function (the_session_key) {
                 session_key = the_session_key;
                 seif_connection = Object.freeze({
                     send,
@@ -715,8 +714,8 @@ function make_consumer(
                     return;
                 }
 
-// Read and unmask the first two bytes to get the length of the identifier. The
-// Seif specification does not specify endianness, so big-endian it is.
+// Read the first two bytes to get the length of the identifier. The Seif
+// specification does not specify endianness, so big-endian it is.
 
                 identifier_length = new DataView(take(2)).getUint16(0);
             }
