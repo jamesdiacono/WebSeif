@@ -2,11 +2,11 @@
 
 ![](https://james.diacono.com.au/files/seif.png)
 
-WebSeif (pronounced "websafe") implements the [Seif Protocol](https://www.crockford.com/seif.html) using the WebCrypto API, available in Node.js, Deno and the browser. The Seif Protocol facilitates secure message-based communication for distributed applications, with minimal network overhead.
+WebSeif (pronounced "websafe") implements the [Seif Protocol](https://www.crockford.com/seif.html) using the WebCrypto API, available in Node.js, Deno, and the browser. The Seif Protocol facilitates secure message-based communication for distributed applications, with minimal network overhead.
 
-WebSeif is in the Public Domain. It does not come with any kind of warranty, so use it at your own risk. For more information about the risks, refer to the Insecurity section at the end of this document.
+WebSeif is in the Public Domain. It does not come with any kind of warranty, so use it at your own risk. For more information about the risks, refer to the [Insecurity](#insecurity) section at the end of this document.
 
-The communicate using WebSeif, you must first have a __party__.
+To communicate using WebSeif, you must first have a __party__.
 
 ## Parties
 Parties are created using the constructor function exported by party.js.
@@ -17,8 +17,8 @@ Parties are created using the constructor function exported by party.js.
 
 The constructor takes four parameters:
 
-- _store_: The store object to use. See the Stores section.
-- _transport_: The transport object to use. See the Transports section.
+- _store_: The store object to use. See the [Stores](#stores) section.
+- _transport_: The transport object to use. See the [Transports](#transports) section.
 - _autogenerate_keypair_: Whether the _store_'s keypair should be generated automatically, if missing. Defaults to false.
 - _webcrypto_: The WebCrypto object. Defaults to `window.crypto`. On Node.js, pass the `webcrypto` member of the built-in "crypto" module.
 
@@ -41,10 +41,10 @@ A _close_ function is returned, which can be called to close the existing connec
 The _connect_options_ parameter is an object with the following properties, of which only "petname" is required.
 
 #### connect_options.petname
-The party to connect to. A petname is a string used to retrieve an acquaintance from the party's store.
+The party to connect to. The petname is a string used to retrieve an acquaintance from the party's store.
 
 #### connect_options.on_open(_connection_)
-Called when the connection is successfully created. It may be called again following a redirect. The _connection_ parameter is a connection object, described in the Connections section.
+Called when the connection is successfully created. It may be called again following a redirect. The _connection_ parameter is a connection object, described in the [Connections](#connections) section.
 
 #### connect_options.on_message(_connection_, _message_)
 Called each time a message is received over the connection. The _message_ parameter is a clone of the object passed to `connection.send` or `connection.status_send` by the other party.
@@ -59,10 +59,10 @@ Called when the connection is terminated. The exact situation depends on the val
 | object       | `"redirected"` | The connection was redirected by the listening party.
 | object       | object         | The connection failed.
 
-In the event of a redirect, `on_close` is always called with the old connection prior to `on_open` being called with the new connection.
+In the event of a redirect, `on_close` is always called for the old connection prior to `on_open` being called for the new connection.
 
 #### connect_options.hello_value
-A value that is serialized to JSON, encrypted and sent as part of the handshake. This value becomes the _hello_value_ parameter of `listen_options.on_open`.
+A value that is serialized to JSON, encrypted, and sent as part of the handshake. This value becomes the _hello_value_ parameter of `listen_options.on_open`.
 
 #### connect_options.connection_info
 A value that is serialized to JSON and sent unencrypted as part of the handshake. This value becomes the _connection_info_ parameter of `listen_options.on_open`.
@@ -103,7 +103,7 @@ Called each time a connection is terminated. The exact situation depends on the 
 A connection object is used to send messages over a connection, close a connection, or redirect a connection. Connection objects have the following methods:
 
 ### connection.status_send(_message_)
-Sends a _message_ over the connection with no guarantee of delivery.
+Sends a _message_ over the connection with no acknowledgement of delivery.
 
 The _message_ parameter is an object containing zero or more properties. If a property's value is an `ArrayBuffer` instance, it is transmitted as binary data. Otherwise, the property's value is serialized with `JSON.stringify`.
 
@@ -118,7 +118,7 @@ At the other end, the _message_ is reconstituted and passed to `on_message`.
 Like `status_send`, except that the receiving party is asked to acknowledge delivery of the _message_. A Promise is returned, which resolves upon acknowledgement. If something goes wrong, the Promise rejects. A rejection does not imply that the message was not delivered, just that it was not successfully acknowledged.
 
 ### connection.close(_reason_)
-Closes the connection. Each pending Promise returned by `connection.send` will be rejected with the _reason_.
+Closes the connection. Each pending Promise previously returned by `connection.send` will be rejected with the _reason_.
 
 ### connection.redirect(_petname_, _permanent_, _redirect_context_)
 Redirects the connecting party to an acquaintance. The _petname_ parameter is a string identifying the acquaintance. If _permanent_ is `true`, the connecting party will forget about the listening party and connect to the acquaintance in the future. The _redirect_context_ will be sent by the connecting party as the _connection_info_ to the acquaintance, and is optional.
@@ -126,7 +126,9 @@ Redirects the connecting party to an acquaintance. The _petname_ parameter is a 
 Only a listening party may redirect a connection.
 
 ## Stores
-A __store__ is responsible for persisting a party's keypair, as well as its acquaintances. Each __acquaintance__ consists of the petname, address and public key of another Seif party. Let's look at an acquaintance of Alice.
+A __store__ is responsible for persisting a party's keypair, as well as its acquaintances. Each __acquaintance__ consists of the petname, address, and public key of another Seif party.
+
+Let's look at an acquaintance of Alice.
 
     {
         petname: "Bob",
@@ -138,7 +140,7 @@ The __petname__, "Bob", is chosen by Alice to be meaningful. The __address__ is 
 
 WebSeif provides two categories of stores, each using different strategies for persistence.
 
-The __filesystem stores__ read and write their state to a directory. They are used with Node.js or Deno. The private key is encrypted using a password.
+The __filesystem stores__ read and write their state to a directory. There are two implementations, one for Node.js and one for Deno. The private key is encrypted using a password.
 
     import make_store from "./store/node_filesystem_store.js";
     const bob_store = make_store("/path/to/directory", "p@ssw0rd");
@@ -168,7 +170,7 @@ A store object has several methods, some of which take CryptoKey instances that 
 #### store.write_keypair(_keypair_)
 Persists the _keypair_, a `CryptoKeyPair`. If the store already has a keypair, it is overwritten. The returned Promise resolves once the keypair has been persisted.
 
-It is crucial to maximise entropy during key generation, but WebCrypto provides no entropy guarantees. You may wish to generate the keypair using an external utility and then use this method to add it to the store yourself. Refer to the Insecurity section below.
+It is crucial to maximise entropy during key generation, but WebCrypto provides no entropy guarantees. You may wish to generate the keypair using an external utility and then use this method to add it to the store yourself. Refer to the [Insecurity](#insecurity) section below.
 
 #### store.read_keypair()
 Returns a Promise that resolves to the store's `CryptoKeyPair`, or `undefined` if there isn't one.
