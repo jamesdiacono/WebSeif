@@ -131,7 +131,7 @@ function listen(address, on_open, on_receive, on_close) {
                 register(socket);
             }
         ).catch(
-            function (ignore) {
+            function () {
 
 // The listener.close function has just been called. Calling listener.close only
 // prevents the listener from accepting new connections. Any open sockets must

@@ -223,7 +223,7 @@ function filesystem_store(
             }).then(function ([privateKey, publicKey]) {
                 return {privateKey, publicKey};
             });
-        }).catch(function (ignore) {
+        }).catch(function () {
 
 // Something probably went wrong decrypting the private key. This could be due
 // to a change in 'iterations' or some other parameter.

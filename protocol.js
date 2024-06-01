@@ -883,7 +883,7 @@ function connect({
     let close_transport;
     let on_redirect;
 
-    function on_transport_receive(ignore, chunk) {
+    function on_transport_receive(_, chunk) {
         if (consumer !== undefined) {
             return consumer.consume(chunk);
         }
@@ -891,7 +891,7 @@ function connect({
         return on_close(undefined, "Unexpected chunk.");
     }
 
-    function on_transport_close(ignore, reason) {
+    function on_transport_close(_, reason) {
         transport_connection = undefined;
         if (consumer !== undefined) {
             consumer.transport_closed(reason);

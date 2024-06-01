@@ -119,7 +119,7 @@ function websockets_transport(listen_tls_options) {
                     return respondWith(response);
                 }
             ).catch(
-                function (ignore) {
+                function () {
 
 // Either the response could not be sent, or the listener.close function has
 // just been called.

@@ -37,7 +37,7 @@ function server_listen(webcrypto, filesystem_store, websockets_transport) {
     function listen() {
         const stop_bob = bob.listen({
             address: bob_address,
-            on_open(ignore) {
+            on_open() {
                 console.log("bob on_open");
                 setTimeout(
                     function () {
@@ -106,7 +106,7 @@ function browser_connect() {
                     {age: message.age + 1}
                 );
             },
-            on_close(ignore, reason) {
+            on_close(_, reason) {
                 console.log("alice on_close", reason);
             }
         });
