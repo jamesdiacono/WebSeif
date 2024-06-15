@@ -59,7 +59,7 @@ function websocketify(server, on_open, on_receive, on_close) {
 
 //  on_receive(connection, message)
 //      Called with each incoming message. The 'message' parameter will be a
-//      string or an ArrayBuffer, depending on the message type.
+//      string or a Uint8Array, depending on the message type.
 
 //  on_close(connection, reason)
 //      Called when an existing connection is closed. A reason might be
@@ -69,7 +69,7 @@ function websocketify(server, on_open, on_receive, on_close) {
 // unique to a particular connection. It contains the following methods:
 
 //  send(message)
-//      Sends a message. It should be a string or an ArrayBuffer.
+//      Sends a message. It should be a string or a Uint8Array.
 
 //  close(reason)
 //      Closes the connection. The 'reason' parameter will be passed to the
@@ -96,7 +96,7 @@ function websocketify(server, on_open, on_receive, on_close) {
                         : 0x2
                     ),
 
-// A string is converted to a Buffer. An ArrayBuffer is wrapped in a Buffer
+// A string is converted to a Buffer. A Uint8Array is wrapped in a Buffer
 // instance without any copying.
 
                     Buffer.from(payload)
@@ -231,7 +231,7 @@ function websocketify(server, on_open, on_receive, on_close) {
                         (
                             textual
                             ? payload.toString()
-                            : payload.buffer
+                            : payload
                         )
                     );
                 } else {
@@ -245,7 +245,7 @@ function websocketify(server, on_open, on_receive, on_close) {
                         (
                             textual
                             ? payload_fragment.toString()
-                            : payload_fragment.buffer
+                            : payload_fragment
                         )
                     );
                 }

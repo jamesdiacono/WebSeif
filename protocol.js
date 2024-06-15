@@ -33,14 +33,14 @@
 
 //          connection.send(chunk)
 //              Send a chunk of binary data down the connection. The 'chunk' is
-//              an ArrayBuffer.
+//              a Uint8Array.
 
 //          connection.close()
 //              Close the connection.
 
 //  on_receive(connection, chunk)
 //      A function that is called with each 'chunk' that arrives over a
-//      connection. The chunk is an ArrayBuffer.
+//      connection. The chunk is a Uint8Array.
 
 //  on_close(connection, reason)
 //      A function that is called when a connection is closed. If the connection
@@ -57,20 +57,19 @@
 import hex from "./hex.js";
 import elliptic from "./elliptic.js";
 
-function concat_buffers(a, b) {
-    let concatenated = new ArrayBuffer(a.byteLength + b.byteLength);
-    let array = new Uint8Array(concatenated);
-    array.set(new Uint8Array(a), 0);
-    array.set(new Uint8Array(b), a.byteLength);
-    return concatenated;
+function concat_bytes(a, b) {
+    let array = new Uint8Array(a.byteLength + b.byteLength);
+    array.set(a, 0);
+    array.set(b, a.byteLength);
+    return array;
 }
 
 function encode_json(value) {
-    return new TextEncoder().encode(JSON.stringify(value)).buffer;
+    return new TextEncoder().encode(JSON.stringify(value));
 }
 
-function decode_json(buffer) {
-    return JSON.parse(new TextDecoder().decode(buffer));
+function decode_json(bytes) {
+    return JSON.parse(new TextDecoder().decode(bytes));
 }
 
 function iv(fixed_field) {
@@ -91,56 +90,56 @@ function iv(fixed_field) {
         if (counter > Number.MAX_SAFE_INTEGER) {
             throw new Error("Counter exhausted.");
         }
-        const buffer = new ArrayBuffer(12);
+        const bytes = new Uint8Array(12);
 
 // Use a DataView to ensure a uniform endianness within the IVs, regardless of
 // the machine's architecture.
 
-        const view = new DataView(buffer);
+        const view = new DataView(bytes.buffer);
         view.setUint32(0, fixed_field);
         view.setUint32(4, Math.floor(counter / (2 ** 32)));
         view.setUint32(8, counter % (2 ** 32));
         counter += 1;
-        return buffer;
+        return bytes;
     };
 }
 
-function make_record(identifier, message, encrypt_buffer) {
+function make_record(identifier, message, encrypt_bytes) {
 
 // The 'make_record' function constructs a Seif record, consisting of a binary
 // length field, an identifier, and any number of blobs. The returned Promise
-// resolves to an ArrayBuffer, intended to be put on the wire.
+// resolves to a Uint8Array, intended to be put on the wire.
 
 // Properties found on the 'identifier' object are included in the record's
 // identifier.
 
 // The 'message' parameter is an object containing the values for the record's
-// blobs. The name of each property is the blob ID, and each value is either an
-// ArrayBuffer or a JSON-encodable value.
+// blobs. The name of each property is the blob ID, and each value is either a
+// Uint8Array or a JSON-encodable value.
 
-// The 'encrypt_buffer' function takes a plaintext ArrayBuffer and returns a
-// Promise that resolves to the ciphertext ArrayBuffer.
+// The 'encrypt_bytes' function takes a plaintext Uint8Array and returns a
+// Promise that resolves to the ciphertext Uint8Array.
 
     if (typeof message !== "object") {
         throw new Error("Bad message.");
     }
     identifier.blobs = [];
-    let blob_buffers = Object.keys(
+    let blob_byte_arrays = Object.keys(
         message
     ).filter(function (id) {
         return message[id] !== undefined;
     }).map(function (id) {
-        let buffer;
+        let bytes;
         let blob_type;
 
 // Determine whether the blob should be transmitted as binary or structured
 // data.
 
-        if (message[id]?.constructor === ArrayBuffer) {
-            buffer = message[id];
+        if (message[id]?.constructor === Uint8Array) {
+            bytes = message[id];
             blob_type = "Buffer";
         } else {
-            buffer = encode_json(message[id]);
+            bytes = encode_json(message[id]);
             blob_type = "JSON";
         }
 
@@ -152,33 +151,33 @@ function make_record(identifier, message, encrypt_buffer) {
         identifier.blobs.push({
             id,
             type: blob_type,
-            length: buffer.byteLength
+            length: bytes.length
         });
-        return buffer;
+        return bytes;
     });
 
 // Serialize and encrypt the identifier, then each of the blob buffers.
 
-    const identifier_buffer = encode_json(identifier);
-    if (identifier_buffer.byteLength >= 2 ** 16) {
+    const identifier_bytes = encode_json(identifier);
+    if (identifier_bytes.length >= 2 ** 16) {
         throw new Error("Identifier too big.");
     }
     return Promise.all(
-        [identifier_buffer, ...blob_buffers].map(encrypt_buffer)
-    ).then(function (encrypted_buffers) {
+        [identifier_bytes, ...blob_byte_arrays].map(encrypt_bytes)
+    ).then(function (encrypted_byte_arrays) {
 
 // The record begins with the identifier length field, which is a big-endian
 // integer sent in the clear.
 
-        let length_buffer = new ArrayBuffer(2);
-        let length_view = new DataView(length_buffer);
-        length_view.setUint16(0, encrypted_buffers[0].byteLength);
+        let length_bytes = new Uint8Array(2);
+        let length_view = new DataView(length_bytes.buffer);
+        length_view.setUint16(0, encrypted_byte_arrays[0].length);
 
 // Finally, we stuff all of the bytes into one big buffer and return that as the
 // record.
 
-        const record_buffers = [length_buffer, ...encrypted_buffers];
-        return record_buffers.reduce(concat_buffers);
+        const record_byte_arrays = [length_bytes, ...encrypted_byte_arrays];
+        return record_byte_arrays.reduce(concat_bytes);
     });
 }
 
@@ -192,13 +191,13 @@ function make_record(identifier, message, encrypt_buffer) {
 //      CryptoKey.
 
 //  encrypt(plaintext, key, iv)
-//      Encrypt a plaintext ArrayBuffer with a CryptoKey and an initialization
-//      vector. The returned Promise resolves to the ciphertext ArrayBuffer.
+//      Encrypt a plaintext Uint8Array with a CryptoKey and an initialization
+//      vector. The returned Promise resolves to the ciphertext Uint8Array.
 
 //  decrypt(ciphertext, key, iv)
-//      Decrypt a ciphertext ArrayBuffer with the same CryptoKey and
+//      Decrypt a ciphertext Uint8Array with the same CryptoKey and
 //      initialization vector that were used to encrypt it. The returned
-//      Promise resolves to the plaintext ArrayBuffer.
+//      Promise resolves to the plaintext Uint8Array.
 
 //  derive_key(public_key, private_key)
 //      Derives a symmetric key from a public and private key using the
@@ -219,14 +218,18 @@ const aes = Object.freeze({
             {name: "AES-GCM", iv},
             key,
             plaintext
-        );
+        ).then(function (buffer) {
+            return new Uint8Array(buffer);
+        });
     },
     decrypt(ciphertext, key, iv) {
         return crypto.subtle.decrypt(
             {name: "AES-GCM", iv},
             key,
             ciphertext
-        );
+        ).then(function (buffer) {
+            return new Uint8Array(buffer);
+        });
     },
     derive_key(public_key, private_key) {
         return crypto.subtle.deriveKey(
@@ -261,7 +264,7 @@ function hello(
 
 // The returned Promise resolves to an object with these properties:
 
-//      hello_record: The Hello record as an ArrayBuffer.
+//      hello_record: The Hello record as a Uint8Array.
 //      handshake_key: The generated handshake key, as a CryptoKey.
 
 // We begin by generating an ephemeral keypair and immediately use it to derive
@@ -300,12 +303,12 @@ function hello(
                         helloData: encrypted_hello_data_buffer,
                         connectionInfo: connection_info
                     },
-                    function encrypt(buffer) {
+                    function encrypt(bytes) {
 
 // The sensitive parts of the Hello record have already been encrypted, so we
 // can skip this step.
 
-                        return buffer;
+                        return bytes;
                     }
                 );
             }).then(function (hello_record) {
@@ -332,7 +335,7 @@ function auth_hello(
 
 // The returned Promise resolves to an object with the following properties:
 
-//      auth_hello_record: An ArrayBuffer containing the AuthHello record.
+//      auth_hello_record: A Uint8Array containing the AuthHello record.
 //      session_key: The negotiated session key, as a CryptoKey.
 //      hello_value: The value sent with the Hello message.
 //      initiator_public_key: The initiating party's public key, as a CryptoKey.
@@ -383,9 +386,9 @@ function auth_hello(
             return make_record(
                 {type: "AuthHello"},
                 {sessionKey: ephemeral_public_key_buffer},
-                function encrypt(buffer) {
+                function encrypt(bytes) {
                     return aes.encrypt(
-                        buffer,
+                        bytes,
                         handshake_key,
                         next_encryption_iv()
                     );
@@ -424,7 +427,7 @@ function make_consumer(
 // Incoming state. Bytes are added to the end of a 'buffer', and periodically
 // consumed from the start (unless 'busy' is true).
 
-    let buffer = new ArrayBuffer(0); // The incoming bytes left to process.
+    let buffer = new Uint8Array(0);  // The incoming bytes left to process.
     let busy = false;                // Busy decrypting.
     let identifier;                  // The parsed Seif record identifier.
     let identifier_length;           // The identifier's length in bytes.
@@ -502,12 +505,12 @@ function make_consumer(
         enqueue(function () {
             return elliptic.export_public_key(
                 public_key
-            ).then(function (public_key_buffer) {
+            ).then(function (public_key_bytes) {
                 return make_record(
                     {type: "Redirect"},
                     {
                         address,
-                        publicKey: hex.encode(public_key_buffer),
+                        publicKey: hex.encode(public_key_bytes),
                         permanent,
                         redirectContext: redirect_context
                     },
@@ -692,16 +695,16 @@ function make_consumer(
 // is segmented like [identifier_length, identifier, ...blob_buffers].
 
             if (identifier_length === undefined) {
-                if (buffer.byteLength < 2) {
+                if (buffer.length < 2) {
                     return;
                 }
 
 // Read the first two bytes to get the length of the identifier. The Seif
 // specification does not specify endianness, so big-endian it is.
 
-                identifier_length = new DataView(take(2)).getUint16(0);
+                identifier_length = new DataView(take(2).buffer).getUint16(0);
             }
-            if (buffer.byteLength < identifier_length) {
+            if (buffer.length < identifier_length) {
                 return;
             }
             if (session_key === undefined && handshake_key === undefined) {
@@ -720,8 +723,8 @@ function make_consumer(
 
             busy = true;
             return decrypt(take(identifier_length)).then(
-                function (identifier_buffer) {
-                    identifier = decode_json(identifier_buffer);
+                function (identifier_bytes) {
+                    identifier = decode_json(identifier_bytes);
                     busy = false;
                     return consume();
                 }
@@ -741,7 +744,7 @@ function make_consumer(
 
 // We are receving a Hello record, which arrives in the clear.
 
-                if (buffer.byteLength < blob.length) {
+                if (buffer.length < blob.length) {
                     return;
                 }
                 blob_buffers.push(take(blob.length));
@@ -752,14 +755,14 @@ function make_consumer(
 // authentication tag.
 
             const ciphertext_length = blob.length + 16;
-            if (buffer.byteLength < ciphertext_length) {
+            if (buffer.length < ciphertext_length) {
                 return;
             }
             busy = true;
             return decrypt(
                 take(ciphertext_length)
-            ).then(function (decrypted_buffer) {
-                blob_buffers.push(decrypted_buffer);
+            ).then(function (decrypted_bytes) {
+                blob_buffers.push(decrypted_bytes);
                 busy = false;
                 return consume();
             }).catch(
@@ -775,7 +778,7 @@ function make_consumer(
 
     return Object.freeze({
         consume(chunk) {
-            buffer = concat_buffers(buffer, chunk);
+            buffer = concat_bytes(buffer, chunk);
             consume();
         },
         get_seif_connection() {

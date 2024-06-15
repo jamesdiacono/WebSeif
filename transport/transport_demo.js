@@ -4,12 +4,11 @@
 
 import hex from "../hex.js";
 
-function join_buffers(a, b) {
-    let joined = new ArrayBuffer(a.byteLength + b.byteLength);
-    let array = new Uint8Array(joined);
-    array.set(new Uint8Array(a), 0);
-    array.set(new Uint8Array(b), a.byteLength);
-    return joined;
+function concat_bytes(a, b) {
+    let array = new Uint8Array(a.byteLength + b.byteLength);
+    array.set(a, 0);
+    array.set(b, a.byteLength);
+    return array;
 }
 
 function random_size() {
@@ -49,13 +48,13 @@ function transport_demo(transport, address) {
             console.log("bob on_open");
             bob_connections.set(connection);
         },
-        function on_receive(connection, buffer) {
+        function on_receive(connection, bytes) {
             enqueue(function () {
                 if (
                     stop_bob !== undefined
                     && bob_connections.has(connection)
                 ) {
-                    connection.send(buffer);
+                    connection.send(bytes);
                 }
             });
         },
@@ -66,16 +65,16 @@ function transport_demo(transport, address) {
     );
     const names = ["alice", "carol", "darren"];
     let close_array = names.map(function (name) {
-        let sent = new ArrayBuffer(0);
-        let received = new ArrayBuffer(0);
+        let sent = new Uint8Array(0);
+        let received = new Uint8Array(0);
         let connection;
 
         function send_random_bytes() {
-            let buffer = new Uint8Array(random_size());
-            crypto.getRandomValues(buffer);
-            console.log(name, "sent", buffer.byteLength, "bytes");
-            sent = join_buffers(sent, buffer);
-            connection.send(buffer);
+            let bytes = new Uint8Array(random_size());
+            crypto.getRandomValues(bytes);
+            console.log(name, "sent", bytes.length, "bytes");
+            sent = concat_bytes(sent, bytes);
+            connection.send(bytes);
         }
 
         return transport.connect(
@@ -85,8 +84,8 @@ function transport_demo(transport, address) {
                 connection = the_connection;
                 send_random_bytes();
             },
-            function on_receive(_, buffer) {
-                received = join_buffers(received, buffer);
+            function on_receive(_, bytes) {
+                received = concat_bytes(received, bytes);
                 const sent_string = hex.encode(sent);
                 const received_string = hex.encode(received);
                 if (!sent_string.startsWith(received_string)) {

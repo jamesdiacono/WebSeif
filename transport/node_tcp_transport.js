@@ -26,6 +26,7 @@ function connect(address, on_open, on_receive, on_close) {
             if (reason) {
                 return on_close(undefined, reason);
             }
+
             function fail(reason) {
                 if (on_close !== undefined) {
                     socket.destroy();
@@ -33,6 +34,7 @@ function connect(address, on_open, on_receive, on_close) {
                     on_close = undefined;
                 }
             }
+
             connection = Object.freeze({
                 send(buffer) {
                     socket.write(new Uint8Array(buffer), function (reason) {
@@ -50,7 +52,7 @@ function connect(address, on_open, on_receive, on_close) {
             });
             socket.on("error", fail);
             socket.on("data", function (chunk) {
-                on_receive(connection, chunk.buffer);
+                on_receive(connection, chunk);
             });
             socket.on("end", function () {
                 on_close(connection);
@@ -106,7 +108,7 @@ function listen(address, on_open, on_receive, on_close) {
         registrations.push(connection);
         socket.on("error", fail);
         socket.on("data", function (chunk) {
-            on_receive(connection, chunk.buffer);
+            on_receive(connection, chunk);
         });
         socket.on("end", function () {
             on_close(connection);

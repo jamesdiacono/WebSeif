@@ -19,8 +19,8 @@ function websockets_transport(listen_tls_options) {
     function connect(address, on_open, on_receive, on_close) {
         const socket = new WebSocket(address);
         const connection = Object.freeze({
-            send(buffer) {
-                socket.send(buffer);
+            send(bytes) {
+                socket.send(bytes);
             },
             close() {
                 socket.close();
@@ -34,7 +34,7 @@ function websockets_transport(listen_tls_options) {
             return blob.arrayBuffer().then(
                 function (buffer) {
                     if (on_close !== undefined) {
-                        on_receive(connection, buffer);
+                        on_receive(connection, new Uint8Array(buffer));
                     }
                 }
             );
@@ -75,7 +75,7 @@ function websockets_transport(listen_tls_options) {
                         });
                     }
                     const connection = Object.freeze({
-                        send(buffer) {
+                        send(bytes) {
 
 // The socket.onclose handler seems to be called some time after the socket is
 // actually closed. This means that there is potential for an exception to be
@@ -86,7 +86,7 @@ function websockets_transport(listen_tls_options) {
 // closed.
 
                             if (socket.readyState !== 3) {
-                                socket.send(buffer);
+                                socket.send(bytes);
                             }
                         },
                         close() {
@@ -101,7 +101,11 @@ function websockets_transport(listen_tls_options) {
                         return on_open(connection);
                     };
                     socket.onmessage = function (event) {
-                        return on_receive(connection, event.data);
+                        return on_receive(connection, (
+                            typeof event.data === "string"
+                            ? event.data
+                            : new Uint8Array(event.data)
+                        ));
                     };
                     function close_if_open(reason) {
                         if (

@@ -24,6 +24,7 @@ function opaqify(private_key) {
 }
 
 function indexeddb_store(db_name) {
+
     function request(object_store_name, request_factory) {
 
 // The 'request' function provides a Promise-based interface catering to our
@@ -74,6 +75,7 @@ function indexeddb_store(db_name) {
             open.onerror = reject;
         });
     }
+
     function write_keypair(keypair) {
         return opaqify(keypair.privateKey).then(function (opaque_private_key) {
             return request("keypairs", function (store) {
@@ -91,6 +93,7 @@ function indexeddb_store(db_name) {
             });
         });
     }
+
     function read_keypair() {
         return request("keypairs", function (store) {
             return store.get("");
@@ -98,21 +101,25 @@ function indexeddb_store(db_name) {
             return value?.keypair;
         });
     }
+
     function add_acquaintance(acquaintance) {
         return request("acquaintances", function (store) {
             return store.put(acquaintance);
         });
     }
+
     function remove_acquaintance(petname) {
         return request("acquaintances", function (store) {
             return store.delete(petname);
         });
     }
+
     function read_acquaintance(petname) {
         return request("acquaintances", function (store) {
             return store.get(petname);
         });
     }
+
     return Object.freeze({
         write_keypair,
         read_keypair,

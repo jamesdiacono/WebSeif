@@ -45,9 +45,9 @@ const bob_public_key_hex = "0401D11E26A35297D1F60DD1D252A62859C7B08820B55ABB4C35
 //         elliptic.export_private_key(keypair.privateKey),
 //         elliptic.export_public_key(keypair.publicKey)
 //     ]);
-// }).then(function ([private_buffer, public_buffer]) {
-//     console.log("private", hex.encode(private_buffer));
-//     console.log("public", hex.encode(public_buffer));
+// }).then(function ([private_key_bytes, public_key_bytes]) {
+//     console.log("private", hex.encode(private_key_bytes));
+//     console.log("public", hex.encode(public_key_bytes));
 // });
 
 function server_listen(filesystem_store, websockets_transport) {

@@ -81,7 +81,7 @@ function mock_transport(flakiness = 0) {
 // Slice up the chunk into subchunks, so that they arrive at different times.
 // This simulates backpressure in a TCP stream.
 
-                while (chunk.byteLength > 0) {
+                while (chunk.length > 0) {
                     const take = random_chunk_size();
                     const subchunk = chunk.slice(0, take);
                     chunk = chunk.slice(take);
@@ -117,7 +117,7 @@ function mock_transport(flakiness = 0) {
                         }
                         on_receive(connection, subchunk);
                     }
-                    while (chunk.byteLength > 0) {
+                    while (chunk.length > 0) {
                         const take = random_chunk_size();
                         const subchunk = chunk.slice(0, take);
                         chunk = chunk.slice(take);

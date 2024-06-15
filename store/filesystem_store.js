@@ -16,6 +16,7 @@ function filesystem_store(
     password,
     iterations = 50000
 ) {
+
     function opaqify_keypair(keypair) {
 
 // The 'opaqify_keypair' function returns a Promise that resolves to a
@@ -39,6 +40,7 @@ function filesystem_store(
             };
         });
     }
+
     function keyify_password(salt) {
 
 // Derives a symmetric encryption key from the 'password' string. The returned
@@ -76,6 +78,7 @@ function filesystem_store(
             );
         });
     }
+
     function ensure_directory() {
         return make_directory(directory, {recursive: true}).catch(function () {
 
@@ -85,6 +88,7 @@ function filesystem_store(
             return;
         });
     }
+
     function file_path(name) {
 
 // We want to include the petname in the acquaintance's filename, but it may
@@ -93,14 +97,16 @@ function filesystem_store(
 
         return directory + path_separator + encodeURIComponent(name);
     }
-    function write(name, buffer) {
 
-// Write the given 'buffer' to a file with 'name' within 'directory'. The file's
+    function write(name, bytes) {
+
+// Write the given 'bytes' to a file with 'name' within 'directory'. The file's
 // owner is given permission to read and write, but nobody else is given any
 // permissions.
 
-        return write_file(file_path(name), buffer, {mode: 0o600});
+        return write_file(file_path(name), bytes, {mode: 0o600});
     }
+
     function read(name) {
         return read_file(file_path(name)).catch(function (error) {
             if (error.code !== "ENOENT") {
@@ -115,6 +121,7 @@ function filesystem_store(
     let read_keypair_promise;
     const salt_length = 256 / 8;
     const iv_length = 96 / 8;
+
     function write_keypair(keypair) {
 
 // Encrypt the private key with the password, then write both keys to disk.
@@ -126,7 +133,7 @@ function filesystem_store(
         return Promise.all([
             elliptic.export_private_key(keypair.privateKey),
             keyify_password(salt)
-        ]).then(function ([private_key_buffer, encryption_key]) {
+        ]).then(function ([private_key_bytes, encryption_key]) {
             return Promise.all([
                 crypto.subtle.encrypt(
                     {
@@ -134,12 +141,12 @@ function filesystem_store(
                         iv
                     },
                     encryption_key,
-                    private_key_buffer
+                    private_key_bytes
                 ),
                 elliptic.export_public_key(keypair.publicKey),
                 ensure_directory()
             ]);
-        }).then(function ([encrypted_private_key_buffer, public_key_buffer]) {
+        }).then(function ([encrypted_private_key_buffer, public_key_bytes]) {
 
 // Bundle up the salt, IV and encrypted private key into a binary buffer, and
 // write it to disk alongside the unencrypted public key.
@@ -161,7 +168,7 @@ function filesystem_store(
 // human to inspect.
 
             const public_key_hex = new TextEncoder().encode(
-                hex.encode(public_key_buffer)
+                hex.encode(public_key_bytes)
             );
             return Promise.all([
                 write("private", ciphered),
@@ -175,6 +182,7 @@ function filesystem_store(
             read_keypair_promise = opaqify_keypair(keypair);
         });
     }
+
     function read_keypair() {
         if (read_keypair_promise !== undefined) {
             return read_keypair_promise;
@@ -182,7 +190,7 @@ function filesystem_store(
         read_keypair_promise = Promise.all([
             read("private"),
             read("public")
-        ]).then(function ([ciphered, public_key_buffer]) {
+        ]).then(function ([ciphered, public_key_bytes]) {
             if (ciphered === undefined) {
                 return;
             }
@@ -192,7 +200,7 @@ function filesystem_store(
 
             const salt = ciphered.slice(0, salt_length);
             const iv = ciphered.slice(salt_length, salt_length + iv_length);
-            const encrypted_private_key_buffer = ciphered.slice(
+            const encrypted_private_key_bytes = ciphered.slice(
                 salt_length + iv_length
             );
             return keyify_password(salt).then(function (decryption_key) {
@@ -205,7 +213,7 @@ function filesystem_store(
                         iv
                     },
                     decryption_key,
-                    encrypted_private_key_buffer
+                    encrypted_private_key_bytes
                 );
             }).then(function (private_key_buffer) {
 
@@ -213,9 +221,11 @@ function filesystem_store(
 // not extractable.
 
                 return Promise.all([
-                    elliptic.import_private_key(private_key_buffer),
+                    elliptic.import_private_key(
+                        new Uint8Array(private_key_buffer)
+                    ),
                     elliptic.import_public_key(hex.decode(
-                        new TextDecoder().decode(public_key_buffer)
+                        new TextDecoder().decode(public_key_bytes)
                     ))
                 ]);
             }).then(function ([privateKey, publicKey]) {
@@ -230,20 +240,22 @@ function filesystem_store(
         });
         return read_keypair_promise;
     }
+
     function add_acquaintance(acquaintance) {
         return Promise.all([
             elliptic.export_public_key(acquaintance.public_key),
             ensure_directory()
-        ]).then(function ([public_key_buffer]) {
+        ]).then(function ([public_key_bytes]) {
             return write(
                 "acquaintance_" + acquaintance.petname,
                 new TextEncoder().encode(JSON.stringify({
                     address: acquaintance.address,
-                    public_key: hex.encode(public_key_buffer)
+                    public_key: hex.encode(public_key_bytes)
                 }))
             );
         });
     }
+
     function remove_acquaintance(petname) {
         return remove_file(
             file_path("acquaintance_" + petname)
@@ -253,12 +265,13 @@ function filesystem_store(
             }
         });
     }
+
     function read_acquaintance(petname) {
-        return read("acquaintance_" + petname).then(function (buffer) {
-            if (buffer === undefined) {
+        return read("acquaintance_" + petname).then(function (bytes) {
+            if (bytes === undefined) {
                 return;
             }
-            const object = JSON.parse(new TextDecoder().decode(buffer));
+            const object = JSON.parse(new TextDecoder().decode(bytes));
             return elliptic.import_public_key(
                 hex.decode(object.public_key)
             ).then(function (public_key) {
@@ -271,6 +284,7 @@ function filesystem_store(
             });
         });
     }
+
     return Object.freeze({
         write_keypair,
         read_keypair,

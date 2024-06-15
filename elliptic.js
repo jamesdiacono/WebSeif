@@ -10,16 +10,16 @@
 //      limited by the system's available entropy. The returned Promise
 //      resolves to a CryptoKeyPair object containing extractable keys.
 
-//  import_public_key(buffer)
-//  import_private_key(buffer, extractable)
-//      Constructs a CryptoKey from an ArrayBuffer. The returned Promise
+//  import_public_key(bytes)
+//  import_private_key(bytes, extractable)
+//      Constructs a CryptoKey from a Uint8Array. The returned Promise
 //      resolves to the CryptoKey instance. Private CryptoKeys will be
 //      extractable only if the 'extractable' parameter is true.
 
 //  export_public_key(public_key)
 //  export_private_key(private_key)
-//      Extracts a CryptoKey's raw bytes. The returned Promise resolves to an
-//      ArrayBuffer. The 'public_key' and 'private_key' parameters are
+//      Extracts a CryptoKey's raw bytes. The returned Promise resolves to a
+//      Uint8Array. The 'public_key' and 'private_key' parameters are
 //      CryptoKey instances.
 
 /*jslint browser */
@@ -41,10 +41,10 @@ function generate_keypair() {
     );
 }
 
-function import_public_key(buffer) {
+function import_public_key(bytes) {
     return crypto.subtle.importKey(
         "raw",
-        buffer,
+        bytes,
         {
             name: "ECDH",
             namedCurve: curve
@@ -54,10 +54,10 @@ function import_public_key(buffer) {
     );
 }
 
-function import_private_key(buffer, extractable = false) {
+function import_private_key(bytes, extractable = false) {
     return crypto.subtle.importKey(
         "pkcs8",
-        buffer,
+        bytes,
         {
             name: "ECDH",
             namedCurve: curve
@@ -67,12 +67,16 @@ function import_private_key(buffer, extractable = false) {
     );
 }
 
+function arrayify(buffer) {
+    return new Uint8Array(buffer);
+}
+
 function export_public_key(public_key) {
-    return crypto.subtle.exportKey("raw", public_key);
+    return crypto.subtle.exportKey("raw", public_key).then(arrayify);
 }
 
 function export_private_key(private_key) {
-    return crypto.subtle.exportKey("pkcs8", private_key);
+    return crypto.subtle.exportKey("pkcs8", private_key).then(arrayify);
 }
 
 if (import.meta.main) {
@@ -81,11 +85,11 @@ if (import.meta.main) {
             export_public_key(publicKey),
             export_private_key(privateKey)
         ]);
-    }).then(function ([public_buffer, private_buffer]) {
+    }).then(function ([public_key_bytes, private_key_bytes]) {
         return Promise.all([
-            import_public_key(public_buffer),
-            import_private_key(private_buffer),
-            import_private_key(private_buffer, true)
+            import_public_key(public_key_bytes),
+            import_private_key(private_key_bytes),
+            import_private_key(private_key_bytes, true)
         ]);
     }).then(function ([public_key, private_key, extractable_private_key]) {
         if (

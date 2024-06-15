@@ -45,10 +45,7 @@ function connect(address, on_open, on_receive, on_close) {
                 const scratch = new Uint8Array(chunk_size);
                 return socket.read(scratch).then(function (nr_bytes) {
                     if (nr_bytes) {
-                        on_receive(
-                            connection,
-                            scratch.slice(0, nr_bytes).buffer
-                        );
+                        on_receive(connection, scratch.slice(0, nr_bytes));
                         wait_for_next_chunk();
                     } else {
                         on_close(connection);
@@ -107,10 +104,7 @@ function listen(address, on_open, on_receive, on_close) {
             const scratch = new Uint8Array(chunk_size);
             return socket.read(scratch).then(function (nr_bytes) {
                 if (nr_bytes) {
-                    on_receive(
-                        connection,
-                        scratch.slice(0, nr_bytes).buffer
-                    );
+                    on_receive(connection, scratch.slice(0, nr_bytes));
                     wait_for_next_chunk();
                 } else {
                     on_close(connection);

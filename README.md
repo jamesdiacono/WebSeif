@@ -104,11 +104,11 @@ A connection object is used to send messages over a connection, close a connecti
 ### connection.status_send(_message_)
 Sends a _message_ over the connection with no acknowledgement of delivery.
 
-The _message_ parameter is an object containing zero or more properties. If a property's value is an `ArrayBuffer` instance, it is transmitted as binary data. Otherwise, the property's value is serialized with `JSON.stringify`.
+The _message_ parameter is an object containing zero or more properties. If a property's value is a `Uint8Array` instance, it is transmitted as binary data. Otherwise, the property's value is serialized with `JSON.stringify`.
 
     connection.status_send({
         my_json: [0, 1, 2],
-        my_buffer: new Uint8Array([3, 4, 5]).buffer
+        my_bytes: new Uint8Array([3, 4, 5])
     });
 
 At the other end, the _message_ is reconstituted and passed to `on_message`.
