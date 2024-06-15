@@ -5,22 +5,16 @@
 // also supplied with a transport that is used as a basis for communication
 // with other parties.
 
-/*jslint browser */
+/*jslint browser, node, deno */
 
-import make_elliptic from "./elliptic.js";
+import elliptic from "./elliptic.js";
 import protocol from "./protocol.js";
 
 function do_nothing() {
     return;
 }
 
-function party(
-    store,
-    transport,
-    autogenerate_keypair = false,
-    webcrypto = window.crypto
-) {
-    const elliptic = make_elliptic(webcrypto);
+function party(store, transport, autogenerate_keypair = false) {
 
     function get_keypair() {
 
@@ -93,7 +87,6 @@ function party(
                 return;
             }
             protocol_close = protocol.connect({
-                webcrypto,
                 keypair,
                 transport_connect: transport.connect,
                 address: acquaintance.address,
@@ -206,7 +199,6 @@ function party(
                 return;
             }
             protocol_stop = protocol.listen({
-                webcrypto,
                 keypair,
                 transport_listen: transport.listen,
                 address,
@@ -223,6 +215,95 @@ function party(
         };
     }
     return Object.freeze({connect, listen});
+}
+
+if (import.meta.main) {
+    Promise.all(
+        typeof Deno === "object"
+        ? [
+            import("./transport/deno_tcp_transport.js"),
+            import("./store/deno_filesystem_store.js")
+        ]
+        : [
+            import("./transport/node_tcp_transport.js"),
+            import("./store/node_filesystem_store.js")
+        ]
+    ).then(function ([tcp_transport_module, filesystem_store_module]) {
+        const tcp_transport = tcp_transport_module.default;
+        const filesystem_store = filesystem_store_module.default;
+        const transport = tcp_transport();
+        const alice_store = filesystem_store("/tmp/alice", "letmein", 1000);
+        const alice = party(alice_store, transport, true);
+        const bob_store = filesystem_store("/tmp/bob", "secret1", 1000);
+        const bob_address = "127.0.0.1:6200";
+        const bob = party(bob_store, transport, false);
+        const carol_store = filesystem_store("/tmp/carol", "p@ssw0rd", 1000);
+        const carol_address = "127.0.0.1:6201";
+        const carol = party(carol_store, transport, false);
+        Promise.all([
+            elliptic.generate_keypair(),
+            elliptic.generate_keypair()
+        ]).then(function ([bob_keypair, carol_keypair]) {
+            return Promise.all([
+                bob_store.write_keypair(bob_keypair),
+                carol_store.write_keypair(carol_keypair),
+                alice_store.add_acquaintance({
+                    petname: "bob",
+                    address: bob_address,
+                    public_key: bob_keypair.publicKey
+                }),
+                bob_store.add_acquaintance({
+                    petname: "carol",
+                    address: carol_address,
+                    public_key: carol_keypair.publicKey
+                })
+            ]);
+        }).then(function () {
+            const stop_bob = bob.listen({
+                address: bob_address,
+                on_open(_, ...rest) {
+                    console.log("bob on_open", ...rest);
+                },
+                on_message(connection) {
+                    connection.status_send({greeting: "It's Bob!"});
+                    connection.redirect("carol", true);
+                },
+                on_close(_, reason) {
+                    console.log("bob on_close", reason);
+                }
+            });
+            const stop_carol = carol.listen({
+                address: carol_address,
+                on_open() {
+                    console.log("carol on_open");
+                },
+                on_message(connection) {
+                    connection.status_send({greeting: "It's Carol!"});
+                },
+                on_close(_, reason) {
+                    console.log("carol on_close", reason);
+                }
+            });
+            const close_alice = alice.connect({
+                petname: "bob",
+                hello_value: "Hello data.",
+                connection_info: "Connection info.",
+                on_open(connection) {
+                    console.log("alice on_open");
+                    connection.status_send({greeting: "It's Alice!"});
+                },
+                on_message(_, message) {
+                    console.log("alice on_message", message);
+                },
+                on_close(_, reason) {
+                    console.log("alice on_close", reason);
+                }
+            });
+            setTimeout(stop_bob, Math.random() * 2000, "Done.");
+            setTimeout(stop_carol, Math.random() * 2000, "Done.");
+            setTimeout(close_alice, Math.random() * 2000, "Done.");
+        });
+    });
 }
 
 export default Object.freeze(party);

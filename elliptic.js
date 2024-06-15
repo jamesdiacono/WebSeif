@@ -3,8 +3,7 @@
 // Protocol specification. A 521 bit elliptic curve key is said to be
 // equivalent in strength to a 256 bit AES key.
 
-// The exported constructor function takes as a single parameter the WebCrypto
-// object. It returns an object containing the following methods:
+// An object with the following methods is exported:
 
 //  generate_keypair()
 //      Generates a new public/private keypair. The strength of the keypair is
@@ -31,60 +30,81 @@
 const keysize = 521;
 const curve = "P-" + keysize;
 
-function make_elliptic(webcrypto = window.crypto) {
+function generate_keypair() {
+    return crypto.subtle.generateKey(
+        {
+            name: "ECDH",
+            namedCurve: curve
+        },
+        true,
+        ["deriveKey", "deriveBits"]
+    );
+}
 
-    function generate_keypair() {
-        return webcrypto.subtle.generateKey(
-            {
-                name: "ECDH",
-                namedCurve: curve
-            },
-            true,
-            ["deriveKey", "deriveBits"]
-        );
-    }
+function import_public_key(buffer) {
+    return crypto.subtle.importKey(
+        "raw",
+        buffer,
+        {
+            name: "ECDH",
+            namedCurve: curve
+        },
+        true,
+        []
+    );
+}
 
-    function import_public_key(buffer) {
-        return webcrypto.subtle.importKey(
-            "raw",
-            buffer,
-            {
-                name: "ECDH",
-                namedCurve: curve
-            },
-            true,
-            []
-        );
-    }
+function import_private_key(buffer, extractable = false) {
+    return crypto.subtle.importKey(
+        "pkcs8",
+        buffer,
+        {
+            name: "ECDH",
+            namedCurve: curve
+        },
+        extractable,
+        ["deriveKey", "deriveBits"]
+    );
+}
 
-    function import_private_key(buffer, extractable = false) {
-        return webcrypto.subtle.importKey(
-            "pkcs8",
-            buffer,
-            {
-                name: "ECDH",
-                namedCurve: curve
-            },
-            extractable,
-            ["deriveKey", "deriveBits"]
-        );
-    }
+function export_public_key(public_key) {
+    return crypto.subtle.exportKey("raw", public_key);
+}
 
-    function export_public_key(public_key) {
-        return webcrypto.subtle.exportKey("raw", public_key);
-    }
+function export_private_key(private_key) {
+    return crypto.subtle.exportKey("pkcs8", private_key);
+}
 
-    function export_private_key(private_key) {
-        return webcrypto.subtle.exportKey("pkcs8", private_key);
-    }
-
-    return Object.freeze({
-        generate_keypair,
-        import_public_key,
-        import_private_key,
-        export_public_key,
-        export_private_key
+if (import.meta.main) {
+    generate_keypair().then(function ({publicKey, privateKey}) {
+        return Promise.all([
+            export_public_key(publicKey),
+            export_private_key(privateKey)
+        ]);
+    }).then(function ([public_buffer, private_buffer]) {
+        return Promise.all([
+            import_public_key(public_buffer),
+            import_private_key(private_buffer),
+            import_private_key(private_buffer, true)
+        ]);
+    }).then(function ([public_key, private_key, extractable_private_key]) {
+        if (
+            public_key.type !== "public"
+            || !public_key.extractable
+            || private_key.type !== "private"
+            || private_key.extractable
+            || extractable_private_key.type !== "private"
+            || !extractable_private_key.extractable
+        ) {
+            throw new Error("FAIL");
+        }
     });
 }
 
-export default Object.freeze(make_elliptic);
+export default Object.freeze({
+    generate_keypair,
+    import_public_key,
+    import_private_key,
+    export_public_key,
+    export_private_key
+});

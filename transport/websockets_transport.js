@@ -12,6 +12,8 @@
 
 /*jslint browser, deno */
 
+import transport_demo from "./transport_demo.js";
+
 function websockets_transport(listen_tls_options) {
 
     function connect(address, on_open, on_receive, on_close) {
@@ -77,7 +79,7 @@ function websockets_transport(listen_tls_options) {
 
 // The socket.onclose handler seems to be called some time after the socket is
 // actually closed. This means that there is potential for an exception to be
-// thrown here if 'send' is called on a connection which is thought to be open,
+// thrown here if 'send' is called on a connection that is thought to be open,
 // but is actually closed.
 
 // Until Deno fixes this issue, we silently drop the buffer if the socket is
@@ -151,6 +153,10 @@ function websockets_transport(listen_tls_options) {
         };
     }
     return Object.freeze({listen, connect});
+}
+
+if (import.meta.main) {
+    transport_demo(websockets_transport(), "ws://127.0.0.1:5000");
 }
 
 export default Object.freeze(websockets_transport);

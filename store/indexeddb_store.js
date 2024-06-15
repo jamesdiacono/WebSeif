@@ -2,6 +2,8 @@
 
 /*jslint browser */
 
+import store_demo from "./store_demo.js";
+
 function opaqify(private_key) {
 
 // The 'opaqify' function returns a Promise that resolves to a non-extractable
@@ -118,6 +120,10 @@ function indexeddb_store(db_name) {
         remove_acquaintance,
         read_acquaintance
     });
+}
+
+if (import.meta.main) {
+    store_demo(indexeddb_store("alice"));
 }
 
 export default Object.freeze(indexeddb_store);

@@ -6,6 +6,7 @@
 /*jslint node */
 
 import net from "node:net";
+import transport_demo from "./transport_demo.js";
 
 function parse_address(address) {
     const [host, port] = address.split(":");
@@ -128,6 +129,10 @@ function listen(address, on_open, on_receive, on_close) {
 
 function node_tcp_transport() {
     return Object.freeze({listen, connect});
+}
+
+if (import.meta.main) {
+    transport_demo(node_tcp_transport(), "127.0.0.1:1234");
 }
 
 export default Object.freeze(node_tcp_transport);

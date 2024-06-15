@@ -1,0 +1,129 @@
+// Demonstrates a WebSeif transport.
+
+/*jslint browser, devel */
+
+import hex from "../hex.js";
+
+function join_buffers(a, b) {
+    let joined = new ArrayBuffer(a.byteLength + b.byteLength);
+    let array = new Uint8Array(joined);
+    array.set(new Uint8Array(a), 0);
+    array.set(new Uint8Array(b), a.byteLength);
+    return joined;
+}
+
+function random_size() {
+    if (Math.random() < 0.05) {
+        return 0;
+    }
+    return Math.floor(Math.random() * 1e3);
+}
+
+let queue = [];
+
+function next() {
+    setTimeout(
+        function () {
+            const callback = queue.shift();
+            if (callback !== undefined) {
+                callback();
+                return next();
+            }
+        },
+        Math.random() * 100
+    );
+}
+
+function enqueue(callback) {
+    queue.push(callback);
+    if (queue.length === 1) {
+        next();
+    }
+}
+
+function transport_demo(transport, address) {
+    let bob_connections = new WeakMap();
+    let stop_bob = transport.listen(
+        address,
+        function on_open(connection) {
+            console.log("bob on_open");
+            bob_connections.set(connection);
+        },
+        function on_receive(connection, buffer) {
+            enqueue(function () {
+                if (
+                    stop_bob !== undefined
+                    && bob_connections.has(connection)
+                ) {
+                    connection.send(buffer);
+                }
+            });
+        },
+        function on_close(connection, reason) {
+            console.log("bob on_close", reason);
+            bob_connections.delete(connection);
+        }
+    );
+    const names = ["alice", "carol", "darren"];
+    let close_array = names.map(function (name) {
+        let sent = new ArrayBuffer(0);
+        let received = new ArrayBuffer(0);
+        let connection;
+
+        function send_random_bytes() {
+            let buffer = new Uint8Array(random_size());
+            crypto.getRandomValues(buffer);
+            console.log(name, "sent", buffer.byteLength, "bytes");
+            sent = join_buffers(sent, buffer);
+            connection.send(buffer);
+        }
+
+        return transport.connect(
+            address,
+            function on_open(the_connection) {
+                console.log(name, "on_open");
+                connection = the_connection;
+                send_random_bytes();
+            },
+            function on_receive(_, buffer) {
+                received = join_buffers(received, buffer);
+                const sent_string = hex.encode(sent);
+                const received_string = hex.encode(received);
+                if (!sent_string.startsWith(received_string)) {
+                    throw new Error(name + " FAIL");
+                }
+                if (Math.random < 0.05) {
+                    return connection.close();
+                }
+                if (sent_string === received_string) {
+                    send_random_bytes();
+                }
+            },
+            function on_close(_, reason) {
+                console.log(name, "on_close", reason);
+            }
+        );
+    });
+
+    function unlucky() {
+        return Math.random() < 0.07;
+    }
+
+    enqueue(function russian_roulette() {
+        if (stop_bob === undefined && close_array.length === 0) {
+            return;
+        }
+        if (unlucky() && stop_bob !== undefined) {
+            console.log("stopping bob");
+            stop_bob();
+            stop_bob = undefined;
+        }
+        if (unlucky() && close_array.length > 0) {
+            console.log("closing", names[close_array.length - 1]);
+            close_array.pop()();
+        }
+        return enqueue(russian_roulette);
+    });
+}
+
+export default Object.freeze(transport_demo);

@@ -3,11 +3,10 @@
 
 /*jslint node */
 
-import make_elliptic from "../elliptic.js";
+import elliptic from "../elliptic.js";
 import hex from "../hex.js";
 
 function filesystem_store(
-    webcrypto,
     read_file,
     write_file,
     remove_file,
@@ -22,11 +21,11 @@ function filesystem_store(
 // The 'opaqify_keypair' function returns a Promise that resolves to a
 // non-extractable copy of a CryptoKeyPair.
 
-        return webcrypto.subtle.exportKey(
+        return crypto.subtle.exportKey(
             "pkcs8",
             keypair.privateKey
         ).then(function (key_data) {
-            return webcrypto.subtle.importKey(
+            return crypto.subtle.importKey(
                 "pkcs8",
                 key_data,
                 keypair.privateKey.algorithm,
@@ -53,14 +52,14 @@ function filesystem_store(
 // algorithm required by the Seif Protocol (SHA3-256) but it is the best that
 // WebCrypto offers.
 
-        return webcrypto.subtle.importKey(
+        return crypto.subtle.importKey(
             "raw",
             new TextEncoder().encode(password),
             "PBKDF2",
             false,
             ["deriveKey", "deriveBits"]
         ).then(function (password_key) {
-            return webcrypto.subtle.deriveKey(
+            return crypto.subtle.deriveKey(
                 {
                     name: "PBKDF2",
                     salt,
@@ -114,7 +113,6 @@ function filesystem_store(
 // to avoid crippling delays when the keypair is read at frequent intervals.
 
     let read_keypair_promise;
-    const elliptic = make_elliptic(webcrypto);
     const salt_length = 256 / 8;
     const iv_length = 96 / 8;
     function write_keypair(keypair) {
@@ -122,15 +120,15 @@ function filesystem_store(
 // Encrypt the private key with the password, then write both keys to disk.
 
         const salt = new Uint8Array(salt_length);
-        webcrypto.getRandomValues(salt);
+        crypto.getRandomValues(salt);
         const iv = new Uint8Array(iv_length);
-        webcrypto.getRandomValues(iv);
+        crypto.getRandomValues(iv);
         return Promise.all([
             elliptic.export_private_key(keypair.privateKey),
             keyify_password(salt)
         ]).then(function ([private_key_buffer, encryption_key]) {
             return Promise.all([
-                webcrypto.subtle.encrypt(
+                crypto.subtle.encrypt(
                     {
                         name: "AES-GCM",
                         iv
@@ -201,7 +199,7 @@ function filesystem_store(
 
 // Decrypt the private key.
 
-                return webcrypto.subtle.decrypt(
+                return crypto.subtle.decrypt(
                     {
                         name: "AES-GCM",
                         iv

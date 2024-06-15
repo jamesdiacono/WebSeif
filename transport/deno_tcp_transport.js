@@ -5,6 +5,8 @@
 
 /*jslint deno */
 
+import transport_demo from "./transport_demo.js";
+
 const chunk_size = 8192;
 
 function parse_address(address) {
@@ -157,6 +159,10 @@ function listen(address, on_open, on_receive, on_close) {
 
 function deno_tcp_transport() {
     return Object.freeze({listen, connect});
+}
+
+if (import.meta.main) {
+    transport_demo(deno_tcp_transport(), "127.0.0.1:1234");
 }
 
 export default Object.freeze(deno_tcp_transport);

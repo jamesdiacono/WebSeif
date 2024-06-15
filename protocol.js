@@ -52,10 +52,10 @@
 // stopped, the 'on_open', 'on_receive' and 'on_close' callbacks must not be
 // called again.
 
-/*jslint browser, bitwise */
+/*jslint browser, node, deno, bitwise */
 
 import hex from "./hex.js";
-import make_elliptic from "./elliptic.js";
+import elliptic from "./elliptic.js";
 
 function concat_buffers(a, b) {
     let concatenated = new ArrayBuffer(a.byteLength + b.byteLength);
@@ -108,7 +108,7 @@ function iv(fixed_field) {
 function make_record(identifier, message, encrypt_buffer) {
 
 // The 'make_record' function constructs a Seif record, consisting of a binary
-// length field, and identifier and any number of blobs. The returned Promise
+// length field, an identifier, and any number of blobs. The returned Promise
 // resolves to an ArrayBuffer, intended to be put on the wire.
 
 // Properties found on the 'identifier' object are included in the record's
@@ -118,7 +118,7 @@ function make_record(identifier, message, encrypt_buffer) {
 // blobs. The name of each property is the blob ID, and each value is either an
 // ArrayBuffer or a JSON-encodable value.
 
-// The 'encrypt_buffer' function takes a plaintext ArrayBuffer and returns
+// The 'encrypt_buffer' function takes a plaintext ArrayBuffer and returns a
 // Promise that resolves to the ciphertext ArrayBuffer.
 
     if (typeof message !== "object") {
@@ -144,10 +144,10 @@ function make_record(identifier, message, encrypt_buffer) {
             blob_type = "JSON";
         }
 
-// Include information about the blob in the identifier, which is sent ahead of
-// the blobs. We include the length of the plaintext blob, rather than the
-// length of the ciphertext. This is because the blob buffers must be encrypted
-// after the identifier, due to the irreversible nature of AES-GCM.
+// Include information about the blob in the identifier, sent ahead of the
+// blobs. We include the length of the plaintext blob, rather than the length of
+// the ciphertext. This is because the blob buffers must be encrypted after the
+// identifier, due to the irreversible nature of AES-GCM.
 
         identifier.blobs.push({
             id,
@@ -182,13 +182,10 @@ function make_record(identifier, message, encrypt_buffer) {
     });
 }
 
-function make_aes(webcrypto = window.crypto) {
-
 // The symmetric encryption operations. We use the 256 bit AES-GCM cipher, as
 // per the Seif Protocol specification.
 
-// Given the WebCrypto object, the 'make_aes' function returns an object
-// containing several methods:
+// The 'aes' object contains the following methods:
 
 //  generate_key()
 //      Generates a new symmetric key. The returned Promise resolves to a
@@ -206,48 +203,46 @@ function make_aes(webcrypto = window.crypto) {
 //  derive_key(public_key, private_key)
 //      Derives a symmetric key from a public and private key using the
 //      Diffie-Hellman key exchange protocol (ECDH). The public and private
-//      keys do not form a keypair. The returned Promise resolves to the shared
-//      secret, a CryptoKey instance.
+//      keys should not form a keypair. The returned Promise resolves to the
+//      shared secret, a CryptoKey instance.
 
-    return Object.freeze({
-        generate_key() {
-            return webcrypto.subtle.generateKey(
-                {name: "AES-GCM", length: 256},
-                true,
-                ["encrypt", "decrypt"]
-            );
-        },
-        encrypt(plaintext, key, iv) {
-            return webcrypto.subtle.encrypt(
-                {name: "AES-GCM", iv},
-                key,
-                plaintext
-            );
-        },
-        decrypt(ciphertext, key, iv) {
-            return webcrypto.subtle.decrypt(
-                {name: "AES-GCM", iv},
-                key,
-                ciphertext
-            );
-        },
-        derive_key(public_key, private_key) {
-            return webcrypto.subtle.deriveKey(
-                {
-                    name: "ECDH",
-                    public: public_key
-                },
-                private_key,
-                {name: "AES-GCM", length: 256},
-                true,
-                ["encrypt", "decrypt"]
-            );
-        }
-    });
-}
+const aes = Object.freeze({
+    generate_key() {
+        return crypto.subtle.generateKey(
+            {name: "AES-GCM", length: 256},
+            true,
+            ["encrypt", "decrypt"]
+        );
+    },
+    encrypt(plaintext, key, iv) {
+        return crypto.subtle.encrypt(
+            {name: "AES-GCM", iv},
+            key,
+            plaintext
+        );
+    },
+    decrypt(ciphertext, key, iv) {
+        return crypto.subtle.decrypt(
+            {name: "AES-GCM", iv},
+            key,
+            ciphertext
+        );
+    },
+    derive_key(public_key, private_key) {
+        return crypto.subtle.deriveKey(
+            {
+                name: "ECDH",
+                public: public_key
+            },
+            private_key,
+            {name: "AES-GCM", length: 256},
+            true,
+            ["encrypt", "decrypt"]
+        );
+    }
+});
 
 function hello(
-    webcrypto,
     initiator_public_key,
     receiver_public_key,
     encryption_iv,
@@ -258,7 +253,6 @@ function hello(
 // The 'hello' function produces some values that are required to initiate a
 // Seif handshake. It takes the following parameters:
 
-//      webcrypto: The WebCrypto object.
 //      initiator_public_key: The public key of the initiator, as a CryptoKey.
 //      receiver_public_key: The public key of the receiver, as a CryptoKey.
 //      encryption_iv: An IV to be used for a single encryption.
@@ -269,9 +263,6 @@ function hello(
 
 //      hello_record: The Hello record as an ArrayBuffer.
 //      handshake_key: The generated handshake key, as a CryptoKey.
-
-    const aes = make_aes(webcrypto);
-    const elliptic = make_elliptic(webcrypto);
 
 // We begin by generating an ephemeral keypair and immediately use it to derive
 // the handshake key. This handshake key is used to encrypt the "hello data",
@@ -325,7 +316,6 @@ function hello(
 }
 
 function auth_hello(
-    webcrypto,
     hello_message,
     private_key,
     next_decryption_iv,
@@ -335,7 +325,6 @@ function auth_hello(
 // The 'auth_hello' function produces some values that are required to complete
 // a Seif handshake. It takes the following parameters:
 
-//      webcrypto: The WebCrypto object.
 //      hello_message: The Hello message as an object.
 //      private_key: The listener's private key, as a CryptoKey.
 //      next_decryption_iv: An IV generator for decryption.
@@ -357,8 +346,6 @@ function auth_hello(
 // derive and decrypt, and if it looks good we construct a response that
 // initiates the session key exchange.
 
-    const aes = make_aes(webcrypto);
-    const elliptic = make_elliptic(webcrypto);
     let hello_value;
     let session_key;
     let initiator_public_key;
@@ -416,7 +403,6 @@ function auth_hello(
 }
 
 function make_consumer(
-    webcrypto,                       // The WebCrypto object.
     transport_connection,            // The underlying transport connection.
     private_key,                     // Our private key.
     next_encryption_iv,              // Returns the next encryption IV.
@@ -449,9 +435,6 @@ function make_consumer(
 
     let queue = Promise.resolve();   // Outgoing message queue.
     let pending_acks = [];           // Pending acknowledgement callbacks.
-
-    const aes = make_aes(webcrypto);
-    const elliptic = make_elliptic(webcrypto);
 
     function encrypt(plain) {
         return aes.encrypt(
@@ -595,7 +578,6 @@ function make_consumer(
 
                 busy = true;
                 return auth_hello(
-                    webcrypto,
                     message,
                     private_key,
 
@@ -806,7 +788,6 @@ function make_consumer(
 }
 
 function listen({
-    webcrypto,
     keypair,
     transport_listen,
     address,
@@ -820,7 +801,6 @@ function listen({
         consumer_map.set(
             transport_connection,
             make_consumer(
-                webcrypto,
                 transport_connection,
                 keypair.privateKey,
                 iv(1),
@@ -867,7 +847,6 @@ function listen({
 }
 
 function connect({
-    webcrypto,
     keypair,
     transport_connect,
     address,
@@ -908,7 +887,6 @@ function connect({
         const next_encryption_iv = iv(0);
         const next_decryption_iv = iv(1);
         return hello(
-            webcrypto,
             keypair.publicKey,
             remote_public_key,
             next_encryption_iv(),
@@ -920,7 +898,6 @@ function connect({
                     return;
                 }
                 consumer = make_consumer(
-                    webcrypto,
                     transport_connection,
                     keypair.privateKey,
                     next_encryption_iv,
@@ -993,6 +970,131 @@ function connect({
         }
         return close_transport();
     };
+}
+
+import mock_transport from "./transport/mock_transport.js";
+const transport = mock_transport(0.01);
+const bob_address = "bob";
+const carol_address = "carol";
+// import websock_transport from "./transport/websockets_transport.js";
+// const transport = websock_transport();
+// const bob_address = "ws://127.0.0.1:6666";
+// const carol_address = "ws://127.0.0.1:5555";
+// import tcp_transport from "./transport/deno_tcp_transport.js";
+// const transport = tcp_transport();
+// const bob_address = "127.0.0.1:6666";
+// const carol_address = "127.0.0.1:5555";
+let stop_alice;
+let stop_bob;
+let stop_carol;
+let dummy_message = {
+    json: "some text",
+    age: 0,
+    bar: hex.decode("FF0C01")
+};
+
+function check_dummy(message) {
+    if (
+        message.json !== dummy_message.json
+        || hex.encode(message.bar) !== hex.encode(dummy_message.bar)
+    ) {
+        throw new Error("Bad dummy.");
+    }
+}
+
+function schedule_stop(name, stop) {
+    return setTimeout(
+        function () {
+            console.log("Randomly stopping " + name + ".");
+            return stop();
+        },
+        500 + (Math.random() * 5000)
+    );
+}
+
+if (import.meta.main) {
+    Promise.all([
+        elliptic.generate_keypair(),
+        elliptic.generate_keypair(),
+        elliptic.generate_keypair()
+    ]).then(function ([alice_keypair, bob_keypair, carol_keypair]) {
+        stop_carol = listen({
+            keypair: carol_keypair,
+            transport_listen: transport.listen,
+            address: carol_address,
+            on_open(connection, ...rest) {
+                console.log("carol on_open", ...rest);
+                connection.status_send(dummy_message);
+            },
+            on_message(_, message) {
+                console.log("carol on_message", message);
+            },
+            on_close(_, reason) {
+                console.log("carol on_close", reason);
+            }
+        });
+        stop_bob = listen({
+            keypair: bob_keypair,
+            transport_listen: transport.listen,
+            address: bob_address,
+            on_open(_, ...rest) {
+                console.log("bob on_open", ...rest);
+            },
+            on_message(connection, message) {
+                console.log("bob on_message", message);
+                check_dummy(message);
+                message.age += 1;
+                connection.send(message).then(function () {
+                    console.log("bob send successful");
+                }).catch(function (reason) {
+                    console.log("bob send failed", reason);
+                });
+                setTimeout(function () {
+                    connection.redirect(
+                        carol_address,
+                        carol_keypair.publicKey,
+                        true,
+                        {proxy: 123}
+                    );
+                }, 250);
+            },
+            on_close(_, reason) {
+                console.log("bob on_close", reason);
+            }
+        });
+        stop_alice = connect({
+            keypair: alice_keypair,
+            transport_connect: transport.connect,
+            address: bob_address,
+            remote_public_key: bob_keypair.publicKey,
+            hello_value: {burgers: true},
+            connection_info: {router: 123},
+            on_open(connection) {
+                console.log("alice on_open");
+                connection.send(dummy_message).then(function () {
+                    console.log("alice send successful");
+                }).catch(function (reason) {
+                    console.log("alice send failed", reason);
+                });
+            },
+            on_message(connection, message) {
+                console.log("alice on_message", message);
+                check_dummy(message);
+                message.age += 1;
+                connection.send(message).then(function () {
+                    console.log("alice send successful");
+                }).catch(function (reason) {
+                    console.log("alice send failed", reason);
+                });
+            },
+            on_close(_, ...args) {
+                console.log("alice on_close", ...args);
+            }
+        });
+        schedule_stop("Alice", stop_alice);
+        schedule_stop("Bob", stop_bob);
+        schedule_stop("Carol", stop_carol);
+    });
 }
 
 export default Object.freeze({listen, connect});

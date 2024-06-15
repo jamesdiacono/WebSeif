@@ -10,6 +10,7 @@
 import crypto from "node:crypto";
 import http from "node:http";
 import https from "node:https";
+import transport_demo from "./transport_demo.js";
 
 // The 'make_frame' and 'websocketify' functions constitute a minimal WebSockets
 // server implementation for Node.js.
@@ -330,6 +331,10 @@ function node_websockets_transport(https_server_options) {
         };
     }
     return Object.freeze({listen, connect});
+}
+
+if (import.meta.main) {
+    transport_demo(node_websockets_transport(), "ws://127.0.0.1:5000");
 }
 
 export default Object.freeze(node_websockets_transport);

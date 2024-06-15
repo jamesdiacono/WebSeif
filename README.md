@@ -20,7 +20,6 @@ The constructor takes four parameters:
 - _store_: The store object to use. See the [Stores](#stores) section.
 - _transport_: The transport object to use. See the [Transports](#transports) section.
 - _autogenerate_keypair_: Whether the _store_'s keypair should be generated automatically, if missing. Defaults to false.
-- _webcrypto_: The WebCrypto object. Defaults to `window.crypto`. On Node.js, pass the `webcrypto` member of the built-in "crypto" module.
 
 An object with two methods, `connect` and `listen`, is returned.
 
@@ -59,7 +58,7 @@ Called when the connection is terminated. The exact situation depends on the val
 | object       | `"redirected"` | The connection was redirected by the listening party.
 | object       | object         | The connection failed.
 
-In the event of a redirect, `on_close` is always called for the old connection prior to `on_open` being called for the new connection.
+In the event of a redirect, `on_close` is always called with the old connection prior to `on_open` being called with the new connection.
 
 #### connect_options.hello_value
 A value that is serialized to JSON, encrypted, and sent as part of the handshake. This value becomes the _hello_value_ parameter of `listen_options.on_open`.
