@@ -52,7 +52,7 @@
 // stopped, the 'on_open', 'on_receive' and 'on_close' callbacks must not be
 // called again.
 
-/*jslint browser, node, deno, bitwise */
+/*jslint browser, node, deno, global, bitwise */
 
 import hex from "./hex.js";
 import elliptic from "./elliptic.js";
@@ -979,18 +979,22 @@ import mock_transport from "./transport/mock_transport.js";
 const transport = mock_transport(0.01);
 const bob_address = "bob";
 const carol_address = "carol";
+
 // import websock_transport from "./transport/websockets_transport.js";
 // const transport = websock_transport();
 // const bob_address = "ws://127.0.0.1:6666";
 // const carol_address = "ws://127.0.0.1:5555";
+
 // import tcp_transport from "./transport/deno_tcp_transport.js";
 // const transport = tcp_transport();
 // const bob_address = "127.0.0.1:6666";
 // const carol_address = "127.0.0.1:5555";
+
 let stop_alice;
 let stop_bob;
 let stop_carol;
-let dummy_message = {
+const trace = globalThis.console.log;
+const dummy_message = {
     json: "some text",
     age: 0,
     bar: hex.decode("FF0C01")
@@ -1008,7 +1012,7 @@ function check_dummy(message) {
 function schedule_stop(name, stop) {
     return setTimeout(
         function () {
-            console.log("Randomly stopping " + name + ".");
+            trace("Randomly stopping " + name + ".");
             return stop();
         },
         500 + (Math.random() * 5000)
@@ -1026,14 +1030,14 @@ if (import.meta.main) {
             transport_listen: transport.listen,
             address: carol_address,
             on_open(connection, ...rest) {
-                console.log("carol on_open", ...rest);
+                trace("carol on_open", ...rest);
                 connection.status_send(dummy_message);
             },
             on_message(_, message) {
-                console.log("carol on_message", message);
+                trace("carol on_message", message);
             },
             on_close(_, reason) {
-                console.log("carol on_close", reason);
+                trace("carol on_close", reason);
             }
         });
         stop_bob = listen({
@@ -1041,16 +1045,16 @@ if (import.meta.main) {
             transport_listen: transport.listen,
             address: bob_address,
             on_open(_, ...rest) {
-                console.log("bob on_open", ...rest);
+                trace("bob on_open", ...rest);
             },
             on_message(connection, message) {
-                console.log("bob on_message", message);
+                trace("bob on_message", message);
                 check_dummy(message);
                 message.age += 1;
                 connection.send(message).then(function () {
-                    console.log("bob send successful");
+                    trace("bob send successful");
                 }).catch(function (reason) {
-                    console.log("bob send failed", reason);
+                    trace("bob send failed", reason);
                 });
                 setTimeout(function () {
                     connection.redirect(
@@ -1062,7 +1066,7 @@ if (import.meta.main) {
                 }, 250);
             },
             on_close(_, reason) {
-                console.log("bob on_close", reason);
+                trace("bob on_close", reason);
             }
         });
         stop_alice = connect({
@@ -1073,25 +1077,25 @@ if (import.meta.main) {
             hello_value: {burgers: true},
             connection_info: {router: 123},
             on_open(connection) {
-                console.log("alice on_open");
+                trace("alice on_open");
                 connection.send(dummy_message).then(function () {
-                    console.log("alice send successful");
+                    trace("alice send successful");
                 }).catch(function (reason) {
-                    console.log("alice send failed", reason);
+                    trace("alice send failed", reason);
                 });
             },
             on_message(connection, message) {
-                console.log("alice on_message", message);
+                trace("alice on_message", message);
                 check_dummy(message);
                 message.age += 1;
                 connection.send(message).then(function () {
-                    console.log("alice send successful");
+                    trace("alice send successful");
                 }).catch(function (reason) {
-                    console.log("alice send failed", reason);
+                    trace("alice send failed", reason);
                 });
             },
             on_close(_, ...args) {
-                console.log("alice on_close", ...args);
+                trace("alice on_close", ...args);
             }
         });
         schedule_stop("Alice", stop_alice);

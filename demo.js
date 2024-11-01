@@ -7,7 +7,7 @@
 // (Alice) connect to Bob. Bob and Alice should then be seen to have a
 // conversation, until one of them randomly closes the connection.
 
-/*jslint browser, node, deno, long */
+/*jslint browser, node, deno, global, long */
 
 import hex from "./hex.js";
 import elliptic from "./elliptic.js";
@@ -19,6 +19,7 @@ import websockets_transport from "./transport/websockets_transport.js";
 // variable to 'false'. That will test that the stores really are persistent.
 
 const initialize_stores = true;
+const trace = globalThis.console.log;
 const bob_address = "ws://127.0.0.1:6300";
 
 // Uncomment the keys that match the keysize specified in elliptic.js.
@@ -46,8 +47,8 @@ const bob_public_key_hex = "0401D11E26A35297D1F60DD1D252A62859C7B08820B55ABB4C35
 //         elliptic.export_public_key(keypair.publicKey)
 //     ]);
 // }).then(function ([private_key_bytes, public_key_bytes]) {
-//     console.log("private", hex.encode(private_key_bytes));
-//     console.log("public", hex.encode(public_key_bytes));
+//     trace("private", hex.encode(private_key_bytes));
+//     trace("public", hex.encode(public_key_bytes));
 // });
 
 function server_listen(filesystem_store, websockets_transport) {
@@ -62,28 +63,28 @@ function server_listen(filesystem_store, websockets_transport) {
         const stop_bob = bob.listen({
             address: bob_address,
             on_open() {
-                console.log("bob on_open");
+                trace("bob on_open");
                 setTimeout(
                     function () {
-                        console.log("Randomly stopping Bob.");
+                        trace("Randomly stopping Bob.");
                         stop_bob("Done");
                     },
                     4000 * (1 + Math.random())
                 );
             },
             on_message(connection, message) {
-                console.log("bob on_message", message);
+                trace("bob on_message", message);
                 if (message.age >= 10) {
-                    console.log("bob connection.close");
+                    trace("bob connection.close");
                     return connection.close();
                 }
                 return connection.status_send({age: message.age + 1});
             },
             on_close(connection, reason) {
-                console.log("bob on_close", connection, reason);
+                trace("bob on_close", connection, reason);
             }
         });
-        console.log("Bob listening.");
+        trace("Bob listening.");
     }
 
     if (initialize_stores) {
@@ -112,17 +113,17 @@ function browser_connect() {
             petname: "bob",
             on_open(connection) {
                 connection.status_send({age: 0});
-                console.log("alice on_open");
+                trace("alice on_open");
                 setTimeout(
                     function () {
-                        console.log("Randomly closing Alice.");
+                        trace("Randomly closing Alice.");
                         close_alice("Done");
                     },
                     4000 * (1 + Math.random())
                 );
             },
             on_message(connection, message) {
-                console.log("alice on_message", message);
+                trace("alice on_message", message);
                 setTimeout(
                     connection.status_send,
                     300,
@@ -130,7 +131,7 @@ function browser_connect() {
                 );
             },
             on_close(_, reason) {
-                console.log("alice on_close", reason);
+                trace("alice on_close", reason);
             }
         });
     }
@@ -161,7 +162,7 @@ function browser_connect() {
 }
 
 const is_deno = typeof Deno === "object";
-const is_browser = typeof window === "object" && !is_deno;
+const is_browser = globalThis.window !== undefined && !is_deno;
 if (is_browser) {
     browser_connect();
 } else {

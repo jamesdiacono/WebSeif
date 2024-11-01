@@ -7,6 +7,7 @@
 
 /*jslint node, bitwise */
 
+import {Buffer} from "node:buffer";
 import crypto from "node:crypto";
 import http from "node:http";
 import https from "node:https";

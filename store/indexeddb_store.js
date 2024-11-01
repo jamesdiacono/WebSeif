@@ -31,7 +31,7 @@ function indexeddb_store(db_name) {
 // specific usage of IndexedDB.
 
         return new Promise(function (resolve, reject) {
-            const open = window.indexedDB.open(db_name, 1);
+            const open = indexedDB.open(db_name, 1);
             open.onupgradeneeded = function (event) {
                 if (event.oldVersion < 1) {
 

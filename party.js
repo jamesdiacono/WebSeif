@@ -5,7 +5,7 @@
 // also supplied with a transport that is used as a basis for communication
 // with other parties.
 
-/*jslint browser, node, deno */
+/*jslint browser, node, deno, global */
 
 import elliptic from "./elliptic.js";
 import protocol from "./protocol.js";
@@ -218,6 +218,7 @@ function party(store, transport, autogenerate_keypair = false) {
 }
 
 if (import.meta.main) {
+    const trace = globalThis.console.log;
     Promise.all(
         typeof Deno === "object"
         ? [
@@ -262,26 +263,26 @@ if (import.meta.main) {
             const stop_bob = bob.listen({
                 address: bob_address,
                 on_open(_, ...rest) {
-                    console.log("bob on_open", ...rest);
+                    trace("bob on_open", ...rest);
                 },
                 on_message(connection) {
                     connection.status_send({greeting: "It's Bob!"});
                     connection.redirect("carol", true);
                 },
                 on_close(_, reason) {
-                    console.log("bob on_close", reason);
+                    trace("bob on_close", reason);
                 }
             });
             const stop_carol = carol.listen({
                 address: carol_address,
                 on_open() {
-                    console.log("carol on_open");
+                    trace("carol on_open");
                 },
                 on_message(connection) {
                     connection.status_send({greeting: "It's Carol!"});
                 },
                 on_close(_, reason) {
-                    console.log("carol on_close", reason);
+                    trace("carol on_close", reason);
                 }
             });
             const close_alice = alice.connect({
@@ -289,14 +290,14 @@ if (import.meta.main) {
                 hello_value: "Hello data.",
                 connection_info: "Connection info.",
                 on_open(connection) {
-                    console.log("alice on_open");
+                    trace("alice on_open");
                     connection.status_send({greeting: "It's Alice!"});
                 },
                 on_message(_, message) {
-                    console.log("alice on_message", message);
+                    trace("alice on_message", message);
                 },
                 on_close(_, reason) {
-                    console.log("alice on_close", reason);
+                    trace("alice on_close", reason);
                 }
             });
             setTimeout(stop_bob, Math.random() * 2000, "Done.");
